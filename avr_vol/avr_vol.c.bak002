@@ -1,0 +1,164 @@
+/*
+ * avr_vol.c
+ *
+ * Created: 2011/11/10 8:02:23
+ *  Author: g
+ */ 
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "mystd.h"
+
+/*=========*/
+/* globals */
+/*=========*/
+u1 select_sw;
+u1 mute_sw;
+
+/*===========*/
+/* utilities */
+/*===========*/
+
+
+/*===============*/
+/* sub functions */
+/*===============*/
+static inline void select_sw_latch_input(void)
+{
+  static u1 cnt = 0;
+  
+  cnt = (cnt + 1) % 5;                        /* 0..4 */
+  PORTD = (0xE0 & PORTD) | (0x01 << cnt);     /* 1110_0000 */
+  if(0x20 & PIND) select_sw = cnt;            /* 0010_0000 */
+}
+
+static inline void select_sw_output(void)
+{
+  u1 sel_out;
+  
+  switch(select_sw) {
+  case 0:                            /* phone input */
+    PORTD |= 0x80;                   /* turn on relay */
+    break;
+
+  case 1:                            /* PC1: usb if */
+  case 2:                            /* PC2: opt1 */
+  case 3:                            /* PC3: opt2 */
+  case 4:                            /* PC4: opt3 */
+    sel_out = ((select_sw - 1) << 1) & 0x06;      /* xxxx_x11x */
+    PORTC = (PORTC & 0xF9) | sel_out;    /* dai-out */
+    
+    PORTD &= 0x7F;                   /* turn off relay */
+    break;
+  default:
+    PORTD &= 0x7F;                   /* turn off relay */
+  }
+  /* TCNT2 =  0; */
+}
+
+static inline void mute_sw_input()
+{
+  if(PIND & 0x40) {
+    /* todo: enable mute */
+    PORTB |= 0x01;                   /* 0000_0001 */
+  } else {
+    /* todo: disable mute */
+    PORTB &= 0xFE;                   /* 1111_1110 */
+  }
+}
+
+/*============================*/
+/* interrupt service routines */
+/*============================*/
+/* timer0 compare A: select sw, mute sw */
+ISR(TIMER2_COMPA_vect)
+{
+  /* select_sw_latch_input(); */
+  select_sw_output();
+
+}
+
+
+/*============*/
+/* initialize */
+/*============*/
+void init_peripheral(void)
+{
+  /* ---------------------- */
+  /* unlock power reduction */
+  /* ---------------------- */
+  PRR = 0x00;
+  
+  /* clock: external xtal 10MHz */
+
+  /* -------------------- */
+  /* interrupt controller */
+  /* -------------------- */
+
+  /*   timer2: select sw */
+  TCCR2A = 0x00;
+  TCCR2B = 0x01;
+  OCR2A =  1;                       /* select sw */
+  TCNT2 =  0;
+  TIMSK2 = 0x02;                     /* enable compare 2a */
+
+  /* ------------- */
+  /* gpio          */
+  /* ------------- */
+
+  /* port B */
+  PORTB = 0xFF;
+  DDRB  = 0xFF;
+
+  /* port C */
+  PORTC = 0x00;
+  DDRC  = 0xBE;                      /* oioo_oooi */
+
+  /*   7     4   3     0                    */
+  /*   o i o o___o o o i                    */
+  /*   | | |     | | | |                    */
+  /*   | | +-----+ +-+ |                    */
+  /*   | |     |    |  +-- PC0  : VOL(ADIN) */
+  /*   | |     |    +----- PC2-1: SEL       */
+  /*   | |     +---------- PC5-3: N.C       */
+  /*   | +---------------- PC6  : RESET     */
+  /*   +------------------ PC7  : none      */
+
+  /* port D */
+  PORTD = 0x00;                
+  DDRD  = 0x9F;                      /* oiio_oooo */
+
+  /*   7     4   3     0                    */
+  /*   o i i o___o o o o                    */
+  /*   | | | |         |                    */
+  /*   | | | +---------+                    */
+  /*   | | |       |                        */
+  /*   | | |       +------ PD4-0: SEL-OUT   */
+  /*   | | +-------------- PD5  : SEL-IN    */
+  /*   | +---------------- PD6  : MUTE-SW   */
+  /*   +------------------ PD7  : RELAY-OUT */
+
+  
+  /* ------------- */
+  /* adc           */
+  /* ------------- */
+
+
+
+  interrupt_enable();
+}
+
+/*=========== */
+/*    main    */
+/*=========== */
+int main(void)
+{
+   init_peripheral();
+  
+  while(1) {
+    select_sw_latch_input();
+    mute_sw_input();    
+  }
+
+  return 0;
+}

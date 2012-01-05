@@ -1,0 +1,259 @@
+/*
+ * avr_vol.c
+ *
+ * Created: 2011/11/10 8:02:23
+ *  Author: g
+ */ 
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include "mystd.h"
+
+/*=========*/
+/* define  */
+/*=========*/
+#define led_on()    { PORTB |= 0x01;   /* 0000_0001 */ }
+#define led_off()   { PORTB &= 0xFE;   /* 1111_1110 */ }
+
+#define mute_on()   { PORTB |= 0x02;   /* 0000_0010 */ }
+#define mute_off()  { PORTB &= 0xFD;   /* 1111_1101 */ }
+
+#define relay_on()  { PORTD |= 0x80;   /* 1000_0000 */ }
+#define relay_off() { PORTD &= 0x7F;   /* 0111_1111 */ } 
+
+/*=========*/
+/* const   */
+/*=========*/
+const u2 VOLUME_MIN = 0;
+const u2 VOLUME_MAX = 65300;
+
+
+
+/*=========*/
+/* globals */
+/*=========*/
+u4 gtime;
+u1 select_sw;
+u1 mute_sw;
+u2 volume_ad;
+
+/*===========*/
+/* utilities */
+/*===========*/
+
+
+/*===============*/
+/* sub functions */
+/*===============*/
+static inline void select_sw_input(void)
+{
+  static u1 cnt = 0;
+  
+  cnt = (cnt + 1) % 5;                        /* 0..4 */
+  PORTD = (0xE0 & PORTD) | (0x01 << cnt);     /* 1110_0000 */
+  if(0x20 & PIND) select_sw = cnt;            /* 0010_0000 */
+}
+
+static inline void select_sw_output(void)
+{
+  u1 sel_out;
+  
+  switch(select_sw) {
+  case 0:                            /* phone input */
+    relay_on();
+    break;
+
+  case 1:                            /* PC1: usb if */
+  case 2:                            /* PC2: opt1 */
+  case 3:                            /* PC3: opt2 */
+  case 4:                            /* PC4: opt3 */
+    sel_out = ((select_sw - 1) << 1) & 0x06;      /* xxxx_x11x */
+    PORTC = (PORTC & 0xF9) | sel_out;             /* dai-out */
+    relay_off();
+    break;
+  default:
+    relay_off();
+  }
+}
+
+static inline void mute_ctrl(void)
+{
+  if(PIND & 0x40) {
+    mute_on();
+    led_on();
+  } else {
+    mute_off();
+    led_off();
+  }
+}
+
+static inline void adc_start(void)
+{
+  disable_interrupt();
+  ADCSRA |= 0x40;             /* 0100_0000 */
+  enable_interrupt();
+}
+
+static inline void volume_input(void)
+{
+  volume_ad = ADC >> 6;             /* 10 bits, left adjusted */
+}
+
+/*============================*/
+/* interrupt service routines */
+/*============================*/
+/* timer0 compare A: volume input */
+ISR(TIMER0_COMPA_vect)
+{
+  disable_interrupt();
+
+  TCNT0 = 0;
+
+  enable_interrupt();
+}
+
+
+/* timer1 compare A: gtime */
+ISR(TIMER1_COMPA_vect)
+{
+  disable_interrupt();
+
+  gtime++;
+  TCNT1 =  0;
+
+  enable_interrupt();
+}
+
+/* timer2 compare A: select sw */
+ISR(TIMER2_COMPA_vect)
+{
+  disable_interrupt();
+
+  select_sw_input();
+  TCNT2 =  0;
+
+  enable_interrupt();
+}
+
+
+/* adc conversion complete: volume */
+ISR(ADC_vect)
+{
+  disable_interrupt();
+  
+  volume_input();
+
+  enable_interrupt();
+}
+
+/*============*/
+/* initialize */
+/*============*/
+void init_device(void)
+{
+  /* ------------------------------ */
+  /* unlock peripheral restrictions */
+  /* ------------------------------ */
+  PRR = 0x00;
+  
+  /* clock: external xtal 10MHz */
+
+  /* ------------- */
+  /* gpio          */
+  /* ------------- */
+  /* port B */
+  PORTB = 0xFF;
+  DDRB  = 0xFF;
+
+  /*   7     4   3     0                    */
+  /*   o o o o___o o o o                    */
+  /*   | | | |   | | | |                    */
+  /*   | | | |   | | | |                    */
+  /*   | | | |   | | | +-- PB0  : LED       */
+  /*   | | | |   | | +---- PB1  : MUTE-OUT  */
+  /*   | | | |   | +------ PB2  : ~SS (SPI) */
+  /*   | | | |   +-------- PB3  : MOSI(SPI) */
+  /*   | | | +------------ PB4  : MISO(SPI) */
+  /*   | | +-------------- PB5  : SCK(SPI)  */
+  /*   | +---------------- PB6  : XTAL      */
+  /*   +------------------ PB7  : XTAL      */
+
+  /* port C */
+  PORTC = 0x00;
+  DDRC  = 0xBE;                      /* oioo_oooi */
+
+  /*   7     4   3     0                    */
+  /*   o i o o___o o o i                    */
+  /*   | | |     | | | |                    */
+  /*   | | +-----+ +-+ |                    */
+  /*   | |     |    |  +-- PC0  : VOL(ADIN) */
+  /*   | |     |    +----- PC2-1: DAI-OUT   */
+  /*   | |     +---------- PC5-3: N.C.      */
+  /*   | +---------------- PC6  : RESET     */
+  /*   +------------------ PC7  : none      */
+
+  /* port D */
+  PORTD = 0x00;                
+  DDRD  = 0x9F;                      /* oiio_oooo */
+
+  /*   7     4   3     0                    */
+  /*   o i i o___o o o o                    */
+  /*   | | | |         |                    */
+  /*   | | | +---------+                    */
+  /*   | | |       |                        */
+  /*   | | |       +------ PD4-0: SEL-OUT   */
+  /*   | | +-------------- PD5  : SEL-IN    */
+  /*   | +---------------- PD6  : MUTE-SW   */
+  /*   +------------------ PD7  : RELAY-OUT */
+
+  /* ------------- */
+  /* timer         */
+  /* ------------- */
+  /* timer0: volume --> adc */
+  TCCR0A = 0x00;
+  TCCR0B = 0x04;               /* Tck= 25.6us (= 10MHz / 256) */
+  OCR0A =  195;                /* T=5ms (=25.6us * 195) */
+  TCNT0 =  0;
+  TIMSK0 = 0x02;               /* enable comapre A */
+  
+  /* timer1: gtime */
+  TCCR1A = 0x00;
+  TCCR1B = 0x05;               /* Tck= 102.4us (= 10MHz / 1024) */
+  OCR1A =  9766;               /* T= 1s (= 102.4us * 9766)  */
+  TCNT1 =  0;
+  TIMSK1 = 0x02;                /* enable compare A */
+  
+  /* timer2: select sw */
+  TCCR2A = 0x00;
+  TCCR2B = 0x07;                /* Tck=102.4us (= 10MHz / 1024) */
+  OCR2A =  195;                 /* T=20ms select sw */
+  TCNT2 =  0;
+  TIMSK2 = 0x02;                /* enable compare A */
+  
+  /* ------------- */
+  /* adc           */
+  /* ------------- */
+  ADMUX  = 0x60;                /* AREF, PC0, left adjust */
+  DIDR0  = 0x01;                /* PC0 as adc input */
+  ADCSRB = 0x03;                /* auto start adc (by timer 0 compare A) */
+  ADCSRA = 0xAF;                /* 1010_1111 */
+
+
+  enable_interrupt();
+}
+
+/*=========== */
+/*    main    */
+/*=========== */
+int main(void)
+{
+  init_device();
+  adc_start();
+
+  while(1) {
+    select_sw_output();    
+    mute_ctrl();
+  }
+
+  return 0;
+}
