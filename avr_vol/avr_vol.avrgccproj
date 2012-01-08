@@ -21,16 +21,15 @@
     <AssemblyName>avr_vol</AssemblyName>
     <Name>avr_vol</Name>
     <RootNamespace>avr_vol</RootNamespace>
-    <avrtoolinterface>
-    </avrtoolinterface>
-    <avrtool>com.atmel.avrdbg.tool.simulator</avrtool>
+    <avrtoolinterface>debugWIRE</avrtoolinterface>
+    <avrtool>com.atmel.avrdbg.tool.avrdragon</avrtool>
     <com_atmel_avrdbg_tool_avrdragon>
       <ToolType>com.atmel.avrdbg.tool.avrdragon</ToolType>
       <ToolName>AVR Dragon</ToolName>
       <ToolNumber>00A20002395F</ToolNumber>
       <Channel>
         <host>127.0.0.1</host>
-        <port>49866</port>
+        <port>51848</port>
         <ssl>False</ssl>
       </Channel>
       <ToolOptions>
