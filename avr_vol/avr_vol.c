@@ -175,12 +175,24 @@ static inline void spi_ss_out(bool level)
         PORTB &= ~mask;
 }
 
+bool in_range(s2 value, s2 min, s2 max)
+{
+    if(value < min) return FALSE;
+    if(max < value) return FALSE;
+    return TRUE;
+}
+
 static inline void volume_out(void)
 {
-    u1 vol_left, vol_right;
+    const  s2 thresh = 3;       /* dead band */
+    static s2 vol_old = 0;
+    s2 vol = (s2)get_volume_data(vol_ad);
+    if(in_range(vol, vol_old-thresh, vol_old+thresh)) return;
 
-    vol_left = get_volume_data(vol_ad);
-    vol_right = vol_left;
+    const  u1 offset = 0;
+    u1 vol_left, vol_right;
+    vol_left  = vol_old = vol;
+    vol_right = vol + offset;
 
     disable_interrupt();
     spi_ss_out(LO);
