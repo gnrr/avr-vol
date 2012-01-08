@@ -175,6 +175,37 @@ static inline void spi_ss_out(bool level)
         PORTB &= ~mask;
 }
 
+u2 get_table(u2 x, const u1 map[])
+{
+    u4 y;
+    u1 n;
+    u1 mx, my;
+
+    n = m[0];
+    mx = (u1 *)m[1];
+    my = (u1 *)m[1+n];
+
+    if(x <= (u2)mx[0] << 8) {
+        y = (u4)my[0] << 8;
+    } else if(x >= (u2)mx[n-1] << 8) {
+        y = (u4)my[n-1] << 8
+    } else {
+        u4 wy;
+        while(1) {
+            n--;
+            if(x >= (u2)mx[n] << 8) {
+                y = ((u4)my[n] << 8);
+                wy = ((u4)mx[n+1] - (u4)mx[n]);
+                if(wy != (u4)0) {
+                    y = (s4)y + (s4) ((s4)(((s4)my[n+1] - (s4)my[n]) * (s4)((s4)x - (s4)((s4)mx[n] << 8))) / (s4)wy );
+                }
+                break;
+            }
+        }
+    }
+    return (u2)y;
+}
+
 bool in_range(s2 value, s2 min, s2 max)
 {
     if(value < min) return FALSE;
@@ -189,9 +220,11 @@ static inline void volume_out(void)
     s2 vol = (s2)get_volume_data(vol_ad);
     if(in_range(vol, vol_old-thresh, vol_old+thresh)) return;
 
+    vol_old = vol;
+
     const  u1 offset = 0;
     u1 vol_left, vol_right;
-    vol_left  = vol_old = vol;
+    vol_left  = vol;
     vol_right = vol + offset;
 
     disable_interrupt();
