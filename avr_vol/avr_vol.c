@@ -248,7 +248,7 @@ ISR(ADC_vect)
 /*============*/
 /* initialize */
 /*============*/
-void init_device(void)
+void init_devices(void)
 {
     /* ------------------------------ */
     /* unlock peripheral restrictions */
@@ -387,20 +387,19 @@ void init_rams(void)
 /*===========*/
 int main(void)
 {
-    init_device();
+    init_devices();
     init_rams();
     adc_start();
+
+    while(gtime < 3)
+        led_out(ON);
     led_out(OFF);
 
     while(1) {
-        if(gtime < 5) { led_out(ON); continue; }
-        else          { led_out(OFF); }
-
         select_sw_out();
         volume_out();
         mute_ctrl();
     }
-
     return 0;
 }
 
