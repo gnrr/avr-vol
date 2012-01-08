@@ -4,23 +4,29 @@
  * Created: 2011/11/10 8:02:23
  *  Author: g
  *
- *  desc. : audio selector with digital volume
+ *  desc. : digital volume /w audio selector
  *  schem.:
  *  device: ATMEGA88P
  *          PGA2311PA
+ *  build : avr studio 5
  */
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include "mystd.h"
 
-/*=========*/
-/* define  */
-/*=========*/
+/*====================*/
+/* define and const   */
+/*====================*/
+volatile const u1 LEFT_GAIN = 255;         /* max:100% = 255 */
 
-/*=========*/
-/* const   */
-/*=========*/
+#define X(x) (u1)((x)/(100.0/255)+0.5)     /* unit: % */
+#define Y(y) (u1)((y)/(100.0/255)+0.5)     /* unit: % */
+volatile const u1 vol_table[] = {
+    11,
+    X(0), X(10), X(20), X(30), X(40), X(50), X(60), X(70), X(80), X(90), X(100),
+    Y(0), Y(37), Y(55), Y(67), Y(74), Y(81), Y(85), Y(90), Y(94), Y(98), Y(100)
+};
 
 /*=========*/
 /* globals */
@@ -29,11 +35,6 @@ u4 gtime;
 u1 select_sw;
 u1 mute_sw;
 u2 vol_ad;
-
-
-/*===========*/
-/* utilities */
-/*===========*/
 
 /*===============*/
 /* sub functions */
@@ -175,35 +176,23 @@ static inline void spi_ss_out(bool level)
         PORTB &= ~mask;
 }
 
-u2 get_table(u2 x, const u1 map[])
+u1 lookup_table(const u1 x, volatile const u1 tbl[])
 {
-    u4 y;
     u1 n;
-    u1 mx, my;
+    u1 *ex, *ey;
 
-    n = m[0];
-    mx = (u1 *)m[1];
-    my = (u1 *)m[1+n];
+    n = tbl[0];                 /* number of element */
+    ex = (u1 *)&tbl[1];
+    ey = (u1 *)&tbl[1+n];
 
-    if(x <= (u2)mx[0] << 8) {
-        y = (u4)my[0] << 8;
-    } else if(x >= (u2)mx[n-1] << 8) {
-        y = (u4)my[n-1] << 8
-    } else {
-        u4 wy;
-        while(1) {
-            n--;
-            if(x >= (u2)mx[n] << 8) {
-                y = ((u4)my[n] << 8);
-                wy = ((u4)mx[n+1] - (u4)mx[n]);
-                if(wy != (u4)0) {
-                    y = (s4)y + (s4) ((s4)(((s4)my[n+1] - (s4)my[n]) * (s4)((s4)x - (s4)((s4)mx[n] << 8))) / (s4)wy );
-                }
-                break;
-            }
-        }
+    if(x <= ex[0])   return ey[0];
+    if(x >= ex[n-1]) return ey[n-1];
+
+    for(u1 i=n-2;; i--) {
+        if(x <  ex[i]) continue;
+        if(x == ex[i]) return ey[i];
+        return ((ey[i+1] - ey[i]) * (x - ex[i])) / (ex[i+1] - ex[i]) + ey[i];
     }
-    return (u2)y;
 }
 
 bool in_range(s2 value, s2 min, s2 max)
@@ -222,10 +211,9 @@ static inline void volume_out(void)
 
     vol_old = vol;
 
-    const  u1 offset = 0;
     u1 vol_left, vol_right;
-    vol_left  = vol;
-    vol_right = vol + offset;
+    vol_right = lookup_table(vol, vol_table);
+    vol_left  = lookup_table(vol * (LEFT_GAIN / 255), vol_table);
 
     disable_interrupt();
     spi_ss_out(LO);
@@ -422,7 +410,7 @@ void init_rams(void)
 {
     gtime     = 0;
     mute_sw   = 0;
-    select_sw = 1;                /* USB IF */
+    select_sw = 1;                /* initial select: USB IF */
     vol_ad    = 0;
 
 }
