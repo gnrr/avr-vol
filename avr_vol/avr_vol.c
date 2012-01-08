@@ -18,8 +18,6 @@
 /*====================*/
 /* define and const   */
 /*====================*/
-volatile const u1 LEFT_GAIN = 255;         /* max:100% = 255 */
-
 #define X(x) (u1)((x)/(100.0/255)+0.5)     /* unit: % */
 #define Y(y) (u1)((y)/(100.0/255)+0.5)     /* unit: % */
 volatile const u1 vol_table[] = {
@@ -204,16 +202,17 @@ bool in_range(s2 value, s2 min, s2 max)
 
 static inline void volume_out(void)
 {
-    const  s2 thresh = 3;       /* dead band */
+    const  s2 thresh = 1;       /* dead band */
     static s2 vol_old = 0;
     s2 vol = (s2)get_volume_data(vol_ad);
     if(in_range(vol, vol_old-thresh, vol_old+thresh)) return;
 
     vol_old = vol;
 
+    const  s2 offset = 4;
     u1 vol_left, vol_right;
-    vol_right = lookup_table(vol, vol_table);
-    vol_left  = lookup_table(vol * (LEFT_GAIN / 255), vol_table);
+    vol_left = lookup_table(vol, vol_table);
+    vol_right = lookup_table(vol - offset, vol_table);
 
     disable_interrupt();
     spi_ss_out(LO);
