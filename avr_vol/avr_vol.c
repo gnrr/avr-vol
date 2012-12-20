@@ -4,11 +4,11 @@
  * Created: 2011/11/10 8:02:23
  *  Author: g
  *
- *  desc. : digital volume /w audio selector
+ *  desc. : digital volume w/ audio selector
  *  schem.:
  *  device: ATMEGA88P
  *          PGA2311PA
- *  build : avr studio 5
+ *  build : avr studio 5/6
  */
 
 #include <avr/io.h>
