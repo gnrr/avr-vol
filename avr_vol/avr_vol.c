@@ -218,8 +218,8 @@ static inline void volume_out(void)
 	u1 vol_right = 0;
 	if(mute_sw == OFF) {
 		const  s2 offset = 4;
-		vol_left  = lookup_table(vol, vol_table);
-		vol_right = lookup_table(vol - offset, vol_table);
+		vol_left  = lookup_table(vol+offset, vol_table);
+		vol_right = lookup_table(vol       , vol_table);
     }
 
     disable_interrupt();

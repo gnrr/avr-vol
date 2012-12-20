@@ -3,3 +3,9 @@
 *~
 *.bak
 *.bak[0-9]*
+#*
+Makefile
+makedep.mk
+*.o
+*.d
+*.lss
