@@ -31,8 +31,8 @@ volatile const u1 vol_table[] = {
 /*=========*/
 u4 gtime;
 u1 select_sw;
-u2 vol_ad;						/* refreshed:ISR(ADC_vect) */
-bool mute_sw;					/* refreshed:ISR(TIMER2_COMPA_vect) */
+u2 vol_ad;                       /* refreshed:ISR(ADC_vect) */
+bool mute_sw;                    /* refreshed:ISR(TIMER2_COMPA_vect) */
 
 /*===============*/
 /* sub functions */
@@ -60,7 +60,7 @@ static inline void dbg(u1 num, bool state)
 
 static inline void led_out(bool state)
 {
-    const u1 mask = 0x01;         /* 0000_0001 */
+    const u1 mask = 0x01;        /* 0000_0001 */
     u1 now;
 
     now = (PORTB & mask)? ON : OFF;
@@ -72,7 +72,7 @@ static inline void led_out(bool state)
 
 static inline void mute_out(bool state)
 {
-    const u1 mask = 0x02;         /* 0000_0010 */
+    const u1 mask = 0x02;        /* 0000_0010 */
     u1 now;
 
     now = (PORTB & mask)? ON : OFF;
@@ -84,7 +84,7 @@ static inline void mute_out(bool state)
 
 static inline void relay(bool state)
 {
-    const u1 mask = 0x80;         /* 1000_0000 */
+    const u1 mask = 0x80;        /* 1000_0000 */
     u1 now;
 
     now = (PORTD & mask)? ON : OFF;
@@ -98,7 +98,7 @@ static inline void inc_gtime()
 {
     static u1 i = 0;
 
-    i = (i + 1) % 49;              /* 0..49 --> T= 1sec */
+    i = (i + 1) % 49;            /* 0..49 --> T= 1sec */
     if((i==0) && (gtime < 0xFFFFFFFF)) gtime++;
 }
 
@@ -116,14 +116,14 @@ static inline void select_sw_out(void)
     u1 sel_out;
 
     switch(select_sw) {
-    case 0:                            /* phone input */
+    case 0:                      /* phone input */
         relay(ON);
         break;
 
-    case 1:                            /* PC1: USB IF */
-    case 2:                            /* PC2: opt1 */
-    case 3:                            /* PC3: opt2 */
-    case 4:                            /* PC4: opt3 */
+    case 1:                      /* PC1: USB IF */
+    case 2:                      /* PC2: opt1 */
+    case 3:                      /* PC3: opt2 */
+    case 4:                      /* PC4: opt3 */
         sel_out = ((select_sw - 1) << 1) & 0x06;      /* xxxx_x11x */
         PORTC = (PORTC & 0xF9) | sel_out;             /* dai-out */
         relay(OFF);
@@ -150,28 +150,28 @@ static inline void mute_ctrl(void)
 static inline void adc_start(void)
 {
     disable_interrupt();
-    ADCSRA |= 0x40;               /* 0100_0000 */
+    ADCSRA |= 0x40;              /* 0100_0000 */
     enable_interrupt();
 }
 
 static inline void spi_send_byte(u1 byte)
 {
     SPDR = byte;
-    while((SPSR & 0x80) == 0);    /* wait for transmission */
+    while((SPSR & 0x80) == 0);   /* wait for transmission */
 }
 
 u1 get_volume_data(u2 ad)
 {
     u1 out;
 
-    out = (u1)(ad >> 2);		  /* 10 bits(left adjusted) --> 8 bits */
+    out = (u1)(ad >> 2);         /* 10 bits(left adjusted) --> 8 bits */
 
     return out;
 }
 
 static inline void spi_ss_out(bool level)
 {
-    const u1 mask = 0x04;         /* 0000_0100 */
+    const u1 mask = 0x04;        /* 0000_0100 */
 
     if(level)
         PORTB |= mask;
@@ -184,7 +184,7 @@ u1 lookup_table(const u1 x, volatile const u1 tbl[])
     u1 n;
     u1 *ex, *ey;
 
-    n = tbl[0];                 /* number of element */
+    n = tbl[0];                  /* number of element */
     ex = (u1 *)&tbl[1];
     ey = (u1 *)&tbl[1+n];
 
@@ -207,19 +207,19 @@ bool in_range(s2 value, s2 min, s2 max)
 
 static inline void volume_out(void)
 {
-	const  s2 thresh  = 1;      /* dead band */
-	static s2 vol_old = 0;
-	s2 vol = (s2)get_volume_data(vol_ad);
+    const  s2 thresh  = 1;       /* dead band */
+    static s2 vol_old = 0;
+    s2 vol = (s2)get_volume_data(vol_ad);
 
-	if(in_range(vol, vol_old-thresh, vol_old+thresh)) vol = vol_old;
-	else                                              vol_old = vol; /* update */
+    if(in_range(vol, vol_old-thresh, vol_old+thresh)) vol = vol_old;
+    else                                              vol_old = vol; /* update */
 
-	u1 vol_left  = 0;
-	u1 vol_right = 0;
-	if(mute_sw == OFF) {
-		const  s2 offset = 4;
-		vol_left  = lookup_table(vol+offset, vol_table);
-		vol_right = lookup_table(vol       , vol_table);
+    u1 vol_left  = 0;
+    u1 vol_right = 0;
+    if(mute_sw == OFF) {
+        const  s2 offset = 4;
+        vol_left  = lookup_table(vol+offset, vol_table);
+        vol_right = lookup_table(vol       , vol_table);
     }
 
     disable_interrupt();
@@ -280,7 +280,7 @@ ISR(ADC_vect)
     /* dbg(5, ON); */
     disable_interrupt();
 
-    vol_ad = (ADC >> 6);            /* 10 bits, left adjusted */
+    vol_ad = (ADC >> 6);         /* 10 bits, left adjusted */
 
     enable_interrupt();
     /* dbg(5, OFF); */
@@ -301,7 +301,7 @@ void init_devices(void)
     /* ------------- */
     /* wdt           */
     /* ------------- */
-    WDTCSR = 0x00;                /* disable wdt */
+    WDTCSR = 0x00;               /* disable wdt */
 
 
     /* ------------- */
@@ -355,7 +355,7 @@ void init_devices(void)
     /* timer0: volume --> adc */
     TCCR0A = 0x00;
     TCCR0B = 0x05;               /* Tck= 102.4us (= 10MHz / 1024) */
-    OCR0A  = 90;                /* T=10ms (=102.4us * 98) */
+    OCR0A  = 90;                 /* T=10ms (=102.4us * 98) */
     TCNT0  = 0;
     TIMSK0 = 0x02;               /* enable comapre A */
 
@@ -365,23 +365,23 @@ void init_devices(void)
     TCCR1B = 0x05;               /* Tck= 102.4us (= 10MHz / 1024) */
     OCR1A  = 9766;               /* T= 1s (= 102.4us * 9766)  */
     TCNT1  = 0;
-    TIMSK1 = 0x02;                /* enable compare A */
+    TIMSK1 = 0x02;               /* enable compare A */
 #endif
 
     /* timer2: select sw */
     TCCR2A = 0x00;
-    TCCR2B = 0x07;                /* Tck=102.4us (= 10MHz / 1024) */
-    OCR2A  = 195;                 /* T=20ms select sw */
+    TCCR2B = 0x07;               /* Tck=102.4us (= 10MHz / 1024) */
+    OCR2A  = 195;                /* T=20ms select sw */
     TCNT2  = 0;
-    TIMSK2 = 0x02;                /* enable compare A */
+    TIMSK2 = 0x02;               /* enable compare A */
 
     /* ------------- */
     /* adc: volume   */
     /* ------------- */
-    ADMUX  = 0x60;                /* AREF, PC0, left adjust */
-    DIDR0  = 0x01;                /* PC0 as adc input */
-    ADCSRB = 0x03;                /* auto start adc (by timer 0 compare A) */
-    ADCSRA = 0xAF;                /* 1010_1111 */
+    ADMUX  = 0x60;               /* AREF, PC0, left adjust */
+    DIDR0  = 0x01;               /* PC0 as adc input */
+    ADCSRB = 0x03;               /* auto start adc (by timer 0 compare A) */
+    ADCSRA = 0xAF;               /* 1010_1111 */
 
     /* ------------- */
     /* spi: PGA2311  */
@@ -417,7 +417,7 @@ void init_devices(void)
 void init_rams(void)
 {
     gtime     = 0;
-    select_sw = 1;                /* initial select: USB IF */
+    select_sw = 1;               /* initial select: USB IF */
     mute_sw   = ON;
     vol_ad    = 0;
 }
