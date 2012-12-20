@@ -31,8 +31,8 @@ volatile const u1 vol_table[] = {
 /*=========*/
 u4 gtime;
 u1 select_sw;
-u1 mute_sw;
-u2 vol_ad;
+u2 vol_ad;						/* refreshed:ISR(ADC_vect) */
+bool mute_sw;					/* refreshed:ISR(TIMER2_COMPA_vect) */
 
 /*===============*/
 /* sub functions */
@@ -133,9 +133,14 @@ static inline void select_sw_out(void)
     }
 }
 
+static inline void mute_sw_input(void)
+{
+    mute_sw = (PIND & 0x40)? ON:OFF;
+}
+
 static inline void mute_ctrl(void)
 {
-    if(PIND & 0x40) {
+    if(mute_sw) {
         mute_out(ON);    led_out(ON);
     } else {
         mute_out(OFF);   led_out(OFF);
@@ -159,7 +164,7 @@ u1 get_volume_data(u2 ad)
 {
     u1 out;
 
-    out = (u1)(ad >> 2);
+    out = (u1)(ad >> 2);		  /* 10 bits(left adjusted) --> 8 bits */
 
     return out;
 }
@@ -202,17 +207,20 @@ bool in_range(s2 value, s2 min, s2 max)
 
 static inline void volume_out(void)
 {
-    const  s2 thresh = 1;       /* dead band */
-    static s2 vol_old = 0;
-    s2 vol = (s2)get_volume_data(vol_ad);
-    if(in_range(vol, vol_old-thresh, vol_old+thresh)) return;
+	const  s2 thresh  = 1;      /* dead band */
+	static s2 vol_old = 0;
+	s2 vol = (s2)get_volume_data(vol_ad);
 
-    vol_old = vol;
+	if(in_range(vol, vol_old-thresh, vol_old+thresh)) vol = vol_old;
+	else                                              vol_old = vol; /* update */
 
-    const  s2 offset = 4;
-    u1 vol_left, vol_right;
-    vol_left = lookup_table(vol, vol_table);
-    vol_right = lookup_table(vol - offset, vol_table);
+	u1 vol_left  = 0;
+	u1 vol_right = 0;
+	if(mute_sw == OFF) {
+		const  s2 offset = 4;
+		vol_left  = lookup_table(vol, vol_table);
+		vol_right = lookup_table(vol - offset, vol_table);
+    }
 
     disable_interrupt();
     spi_ss_out(LO);
@@ -249,13 +257,14 @@ ISR(TIMER1_COMPA_vect)
     /* dbg(3, OFF); */
 }
 
-/* timer2 compare A: select sw, gtime */
+/* timer2 compare A: select sw, mute sw, gtime */
 ISR(TIMER2_COMPA_vect)
 {
     /* dbg(4, ON); */
     disable_interrupt();
 
     select_sw_input();
+    mute_sw_input();
     TCNT2 =  0;
 
     inc_gtime();
@@ -408,10 +417,9 @@ void init_devices(void)
 void init_rams(void)
 {
     gtime     = 0;
-    mute_sw   = 0;
     select_sw = 1;                /* initial select: USB IF */
+    mute_sw   = ON;
     vol_ad    = 0;
-
 }
 
 /*===========*/
